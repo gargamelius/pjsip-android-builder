@@ -44,20 +44,23 @@ then
     tar xzf sdk.tgz && rm -rf sdk.tgz
 fi
 
-if [ "$DOWNLOAD_TARGET_API" == "1" ]
+if [ "$DOWNLOAD_ANDROID_APIS" == "1" ]
 then
-    echo "Downloading Android API Platform ${TARGET_ANDROID_API}..."
     cd ${BASEDIR}/${SDK_DIR_NAME}/tools
 
     ALL_SDK=$(./android list sdk --all)
 
-    PACKAGE=$(echo "${ALL_SDK}" | grep "API ${TARGET_ANDROID_API}" | head -n 1 | awk '{print $1}' | cut -d'-' -f 1)
-    echo yes | ./android update sdk --all --filter ${PACKAGE} --no-ui --force
+    for api in "${SETUP_ANDROID_APIS[@]}"
+    do
+        echo "Downloading Android API Platform ${api}..."
+        PACKAGE=$(echo "${ALL_SDK}" | grep "API ${api}" | head -n 1 | awk '{print $1}' | cut -d'-' -f 1)
+        echo yes | ./android update sdk --all --filter ${PACKAGE} --no-ui --force
+    done
 
     PACKAGE=$(echo "${ALL_SDK}" | grep "Android SDK Platform-tools" | head -n 1 | awk '{print $1}' | cut -d'-' -f 1)
     echo yes | ./android update sdk --all --filter ${PACKAGE} --no-ui --force
 
-    PACKAGE=$(echo "${ALL_SDK}" | grep "Build-tools" | head -n 1 | awk '{print $1}' | cut -d'-' -f 1)
+    PACKAGE=$(echo "${ALL_SDK}" | grep "Build-tools" | grep "${BUILD_TOOLS_VERSION}" | head -n 1 | awk '{print $1}' | cut -d'-' -f 1)
     echo yes | ./android update sdk --all --filter ${PACKAGE} --no-ui --force
 fi
 
@@ -120,7 +123,18 @@ then
     git clone "${LIBYUV_REPO_PATH}"
     cd "${LIBYUV_REPO_DIR_NAME}"
     export PATH="${BASEDIR}/${NDK_DIR_NAME}:$PATH"
-    sed -i 's/APP_ABI := armeabi armeabi-v7a arm64-v8a x86/APP_ABI := armeabi armeabi-v7a arm64-v8a x86 x86_64 mips mips64/g' jni/Application.mk
+
+    # Re-enable static library, disabled with https://github.com/illuspas/libyuv-android/commit/d5d7e66ed635cf96fce1aa029ccc24a06bb0e7bc
+    sed -i 's/#include $(BUILD_SHARED_LIBRARY)/include $(BUILD_SHARED_LIBRARY)/g' jni/Android.mk
+    sed -i 's/include $(BUILD_STATIC_LIBRARY)/#include $(BUILD_STATIC_LIBRARY)/g' jni/Android.mk   
+
+    if [ "${OPENH264_TARGET_NDK_LEVEL}" -ge "21" ]
+    then
+        sed -i 's/APP_ABI := armeabi-v7a arm64-v8a x86 x86_64/APP_ABI := armeabi armeabi-v7a arm64-v8a x86 x86_64 mips mips64/g' jni/Application.mk
+    else
+        sed -i 's/APP_ABI := armeabi-v7a arm64-v8a x86 x86_64/APP_ABI := armeabi armeabi-v7a x86/g' jni/Application.mk
+    fi
+
     ndk-build
 fi
 
